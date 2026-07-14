@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hushan PO Processing Tool</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+  :root{
+    --paper:#F4F6F8;
+    --surface:#FFFFFF;
+    --ink:#1F2A44;
+    --ink-soft:#5C6B85;
+    --line:#DBE1E8;
+    --accent:#DD8A37;
+    --accent-dark:#B96F26;
+    --accent-soft:#FBEEDD;
+    --ok:#3D7A6F;
+    --ok-soft:#E2F0ED;
+    --warn:#C0524A;
+    --warn-soft:#FBEAE8;
+    --font-sans:-apple-system,BlinkMacSystemFont,"Inter","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+    --font-mono:ui-monospace,"SF Mono","Cascadia Mono","Roboto Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{
+    font-family:var(--font-sans);
+    background:var(--paper);
+    color:var(--ink);
+    line-height:1.5;
+  }
+  .app{max-width:1000px;margin:0 auto;padding:32px 20px 60px;}
+
+  /* header */
+  header{margin-bottom:8px;}
+  .eyebrow{
+    font-family:var(--font-mono);font-size:11px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--accent);margin-bottom:6px;font-weight:600;
+  }
+  h1{font-size:26px;margin:0 0 6px;letter-spacing:-0.01em;}
+  .sub{color:var(--ink-soft);margin:0;font-size:14px;}
+
+  /* stepper */
+  .stepper{display:flex;list-style:none;padding:0;margin:28px 0;gap:0;}
+  .stepper li{
+    flex:1;padding-bottom:10px;border-bottom:3px solid var(--line);
+    color:var(--ink-soft);position:relative;
+  }
+  .stepper li:not(:last-child){margin-right:16px;}
+  .stepper li .num{
+    font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;
+    display:block;margin-bottom:4px;
+  }
+  .stepper li .label{font-size:13px;font-weight:600;}
+  .stepper li.active{color:var(--ink);border-bottom-color:var(--accent);}
+  .stepper li.active .num{color:var(--accent);}
+  .stepper li.done{color:var(--ok);border-bottom-color:var(--ok);}
+
+  /* panels */
+  .panel{display:none;}
+  .panel.active{display:block;animation:fadeIn .25s ease;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+  /* upload */
+  .upload-box{
+    border:2px dashed var(--line);border-radius:12px;padding:56px 24px;
+    text-align:center;background:var(--surface);transition:border-color .15s,background .15s;
+  }
+  .upload-box.dragover{border-color:var(--accent);background:var(--accent-soft);}
+  #pdfInput{display:none;}
+  .upload-label{
+    display:inline-flex;flex-direction:column;align-items:center;gap:10px;
+    cursor:pointer;color:var(--ink-soft);
+  }
+  .upload-icon{
+    width:48px;height:48px;border-radius:50%;border:2px solid var(--accent);
+    color:var(--accent);display:flex;align-items:center;justify-content:center;
+    font-size:22px;
+  }
+  .upload-label .hint{font-size:12px;color:var(--ink-soft);}
+  .filename{margin-top:14px;font-family:var(--font-mono);font-size:13px;color:var(--ink);word-break:break-all;}
+
+  /* buttons */
+  .btn{
+    font:inherit;padding:10px 20px;border-radius:8px;border:1px solid var(--line);
+    background:var(--surface);color:var(--ink);cursor:pointer;font-weight:600;
+    font-size:14px;transition:all .15s;
+  }
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .btn.primary:hover{background:var(--accent-dark);}
+  .btn.ghost:hover{border-color:var(--ink-soft);}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
+  .actions{display:flex;gap:12px;margin-top:18px;flex-wrap:wrap;}
+  .center{display:flex;justify-content:center;margin-top:24px;}
+
+  /* status */
+  .status{margin-top:14px;font-size:13px;color:var(--ink-soft);min-height:1.4em;}
+  .status.error{color:var(--warn);}
+  .status.ok{color:var(--ok);}
+
+  /* step 2 */
+  .order-meta{margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+  .order-meta label{font-size:13px;color:var(--ink-soft);display:flex;align-items:center;gap:8px;}
+  .order-meta input{
+    font:inherit;font-family:var(--font-mono);font-weight:600;font-size:16px;
+    padding:6px 10px;border:1px solid var(--line);border-radius:6px;
+    color:var(--ink);background:var(--surface);
+  }
+  .summary-badge{
+    font-size:12px;font-family:var(--font-mono);padding:6px 12px;border-radius:6px;
+    background:var(--warn-soft);color:var(--warn);
+  }
+  .summary-badge.allok{background:var(--ok-soft);color:var(--ok);}
+
+  .table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);}
+  #itemsTable{width:100%;border-collapse:collapse;font-size:13px;min-width:920px;}
+  #itemsTable thead th{
+    background:var(--paper);text-align:left;padding:10px 8px;font-size:11px;
+    text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);
+    border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;
+  }
+  #itemsTable td{padding:5px 8px;border-bottom:1px solid var(--line);}
+  .item-row td:first-child{border-left:4px dashed var(--line);}
+  .item-row.unmatched td:first-child{border-left-color:var(--warn);}
+  .no-cell{font-family:var(--font-mono);color:var(--ink-soft);text-align:center;}
+  .cell-input{
+    width:100%;border:1px solid transparent;background:transparent;font:inherit;
+    padding:5px;border-radius:4px;color:var(--ink);
+  }
+  .cell-input:focus{border-color:var(--accent);background:#fff;outline:none;}
+  .cell-input.mono{font-family:var(--font-mono);font-size:12px;}
+  .cell-input.num{width:80px;text-align:right;font-family:var(--font-mono);}
+  .comart-input{font-weight:700;}
+  .item-row.unmatched .comart-input{color:var(--warn);}
+  .item-row.unmatched .comart-input::placeholder{color:var(--warn);opacity:.75;}
+  .amount-cell{font-family:var(--font-mono);text-align:right;color:var(--ink-soft);white-space:nowrap;}
+
+  /* step 3 */
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media (max-width:640px){.grid-2{grid-template-columns:1fr;}}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:16px;}
+  .card h3{margin:0 0 12px;font-size:15px;}
+  .filename-preview{font-family:var(--font-mono);font-size:13px;color:var(--ink-soft);word-break:break-all;margin:0 0 14px;}
+
+  .email-field{display:flex;align-items:center;gap:12px;margin-bottom:8px;}
+  .email-field span{width:56px;font-size:13px;color:var(--ink-soft);flex-shrink:0;}
+  .email-field input{
+    flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:6px;
+    font:inherit;background:var(--paper);color:var(--ink);
+  }
+  .email-body-wrap{margin-top:8px;}
+  .email-body-wrap textarea{
+    width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;
+    font-family:var(--font-mono);font-size:12.5px;line-height:1.65;resize:vertical;
+    background:var(--paper);color:var(--ink);
+  }
+
+  /* toast */
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+    background:var(--ink);color:#fff;padding:10px 22px;border-radius:8px;
+    font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:50;
+  }
+  .toast.show{opacity:1;}
+
+  footer{margin-top:36px;padding-top:18px;border-top:1px solid var(--line);font-size:12px;color:var(--ink-soft);line-height:1.7;}
+  footer b{color:var(--ink);}
+  .slogan{font-size:22px;font-weight:700;color:var(--accent);margin:8px 0 0;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="eyebrow">COMART · 越南怡業 → 虎山實業</div>
+    <h1>採購單轉檔與寄送工具</h1>
+    <p class="sub">上傳PDF採購單 → 自動比對COMART編號 → 產生Excel → 準備Email草稿</p>
+    <p class="slogan">訂單來來來 怡業發大財</p>
+  </header>
+
+  <ol class="stepper">
+    <li data-step="1" class="active"><span class="num">01</span><span class="label">上傳採購單</span></li>
+    <li data-step="2"><span class="num">02</span><span class="label">確認品項與編號</span></li>
+    <li data-step="3"><span class="num">03</span><span class="label">產生檔案與寄送</span></li>
+  </ol>
+
+  <main>
+    <!-- STEP 1 -->
+    <section class="panel active" id="panel-1">
+      <div class="upload-box" id="dropZone">
+        <input type="file" id="pdfInput" accept="application/pdf">
+        <label for="pdfInput" class="upload-label">
+          <span class="upload-icon">↑</span>
+          <span>點擊選擇，或將PDF採購單拖放到此處</span>
+          <span class="hint">支援 越南怡業 / COMART VIETNAM 採購單格式</span>
+        </label>
+        <div class="filename" id="fileName"></div>
+      </div>
+      <div class="center">
+        <button id="processBtn" class="btn primary" disabled>開始解析</button>
+      </div>
+      <div class="status" id="step1Status"></div>
+    </section>
+
+    <!-- STEP 2 -->
+    <section class="panel" id="panel-2">
+      <div class="order-meta">
+        <label>訂單號 PO#
+          <input type="text" id="orderNoInput" placeholder="1336-XXXXXXXXX">
+        </label>
+        <div class="summary-badge" id="matchSummary"></div>
+      </div>
+      <div class="table-wrap">
+        <table id="itemsTable">
+          <thead>
+            <tr>
+              <th>No</th>
+              <th>COMART No</th>
+              <th>HUSHAN No</th>
+              <th>備註/客戶代碼</th>
+              <th>交貨日期</th>
+              <th>Qty</th>
+              <th>採購單價</th>
+              <th>採購金額</th>
+              <th>品名</th>
+              <th>規格</th>
+              <th>單位</th>
+            </tr>
+          </thead>
+          <tbody id="itemsBody"></tbody>
+        </table>
+      </div>
+      <div class="actions">
+        <button class="btn ghost" id="backTo1">上一步</button>
+        <button class="btn primary" id="toStep3">產生Excel與Email草稿</button>
+      </div>
+      <div class="status" id="step2Status"></div>
+    </section>
+
+    <!-- STEP 3 -->
+    <section class="panel" id="panel-3">
+      <div class="grid-2">
+        <div class="card">
+          <h3>Excel檔案</h3>
+          <p class="filename-preview" id="excelFilenamePreview">—</p>
+          <button class="btn primary" id="downloadExcelBtn">下載 Excel</button>
+        </div>
+        <div class="card">
+          <h3>原始PDF</h3>
+          <p class="filename-preview" id="pdfFilenamePreview">—</p>
+          <button class="btn ghost" id="downloadPdfBtn">下載 PDF</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Email 草稿預覽</h3>
+        <div class="email-field"><span>收件人</span><input id="emailTo" readonly></div>
+        <div class="email-field"><span>副本</span><input id="emailCc" readonly></div>
+        <div class="email-field"><span>主旨</span><input id="emailSubject" readonly></div>
+        <div class="email-body-wrap">
+          <textarea id="emailBody" rows="14"></textarea>
+        </div>
+        <div class="actions">
+          <button class="btn ghost" id="copyEmailBtn">複製郵件內容</button>
+          <button class="btn ghost" id="outlookLinkBtn">在 Outlook 網頁版開啟</button>
+          <button class="btn primary" id="sendBtn">嘗試透過 Microsoft 365 建立草稿</button>
+        </div>
+        <div class="status" id="sendStatus"></div>
+      </div>
+
+      <div class="actions">
+        <button class="btn ghost" id="backTo2">上一步</button>
+        <button class="btn ghost" id="resetBtn">處理下一張採購單</button>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    此工具會呼叫 <b>Claude API</b> 解析PDF採購單，並透過 <b>Google Drive</b>（HU#／COMART#對照表）與
+    <b>Microsoft 365</b>（Outlook草稿）等連接器完成自動化流程。這些功能需要在 Claude.ai 對話中以 Artifact 形式開啟才能運作；
+    若另存為檔案後在本機直接開啟，自動解析與寄信功能將無法使用，但仍可手動編輯品項並產生 Excel／Email內容、下載檔案。
+    <br>若「嘗試透過 Microsoft 365 建立草稿」目前沒有可用工具，請使用下方的「複製郵件內容」或「在Outlook網頁版開啟」作為備用方式，並記得手動附上 PDF 與 Excel 兩個附件。
+  </footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===================== 常數設定 ===================== */
+const DRIVE_FILE_ID = "1stqo-01gPgJfVcXMbXdV3P4iuHMBjyEd";
+const TO_LIST = ["lina.tan@comart.com.tw","vywb1@comart.com.tw","henry_lai@comart.com.tw"];
+const CC_LIST = ["vsm@comart.com.tw","cvs@comart.com.tw","cvm@comart.com.tw","tracy.li@comart.com.tw","lona.chen@comart.com.tw"];
+const ALL_COLUMNS = ["no","comart no","hushan no","交貨日期","Qty","採購單價","採購金額","已交數量","急料","結案碼","品名","規格","單位","備註","交貨庫別","庫別名稱","請購單別","請購單號","請購序號","參考單別","參考單號","參考序號"];
+
+/* ===================== 狀態 ===================== */
+let state = {
+  pdfFile: null,
+  pdfFilename: "",
+  pdfBase64: "",
+  orderNo: "",
+  items: [],
+  excelBlob: null,
+  excelFilename: ""
+};
+
+/* ===================== 共用工具 ===================== */
+function esc(s){
+  return String(s==null?"":s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>t.classList.remove("show"), 2200);
+}
+
+function goToStep(n){
+  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
+  document.getElementById("panel-"+n).classList.add("active");
+  document.querySelectorAll(".stepper li").forEach(li=>{
+    const step = +li.dataset.step;
+    li.classList.toggle("active", step===n);
+    li.classList.toggle("done", step<n);
+  });
+}
+
+function fileToBase64(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>resolve(reader.result.split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ===================== Claude API ===================== */
+async function claudeCall(messages, mcpServers){
+  const body = { model: "claude-sonnet-4-6", max_tokens: 8000, messages: messages };
+  if (mcpServers) body.mcp_servers = mcpServers;
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok){
+    const errText = await resp.text();
+    throw new Error("API錯誤 " + resp.status + ": " + errText);
+  }
+  return resp.json();
+}
+
+function extractText(data){
+  return (data.content || [])
+    .filter(b=>b.type==="text")
+    .map(b=>b.text)
+    .join("\n");
+}
+
+function extractToolUseCount(data){
+  return (data.content || []).filter(b=>b.type==="mcp_tool_use").length;
+}
+
+function parseJSONFromText(text){
+  let cleaned = text.replace(/```json/g,"").replace(/```/g,"").trim();
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start === -1 || end === -1 || end < start){
+    throw new Error("回應中找不到JSON內容");
+  }
+  return JSON.parse(cleaned.slice(start, end+1));
+}
+
+/* ===================== Step 1: 解析PDF ===================== */
+async function extractOrderFromPDF(base64){
+  const prompt = `你是一個採購單資料擷取助手。請閱讀附件的PDF採購單(來自越南怡業/COMART VIETNAM CO., LTD.，客戶為虎山實業)，並只回傳一個JSON物件，不要有任何說明文字、不要使用markdown程式碼框。
+
+JSON格式：
+{
+  "order_no": "訂單號，通常格式類似 1336-XXXXXXXXX，可能標示為PO No./訂單號/Order No.等",
+  "items": [
+    {
+      "hushan_no": "品項的HU#編號，請保留PDF上的原始格式",
+      "customer_code": "客戶代碼(例如81704)，若無則為null",
+      "delivery_date": "交貨日期，格式YYYY/MM/DD",
+      "qty": 數量(數字),
+      "unit_price": 採購單價(數字),
+      "name": "品名",
+      "spec": "規格",
+      "unit": "單位，例如PCS"
+    }
+  ]
+}
+
+注意：
+- 數字欄位請輸出數字型態，不要加千分位逗號或貨幣符號。
+- 若PDF中每筆品項各自有交貨日期，請分別填入；若整張單只有一個交貨日期，每筆品項皆填該日期。
+- 不要遺漏任何品項。`;
+
+  const messages = [{
+    role: "user",
+    content: [
+      { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+      { type: "text", text: prompt }
+    ]
+  }];
+
+  const data = await claudeCall(messages);
+  const text = extractText(data);
+  const parsed = parseJSONFromText(text);
+  if (!parsed.order_no || !Array.isArray(parsed.items)){
+    throw new Error("解析結果格式不正確");
+  }
+  return parsed;
+}
+
+/* ===================== Step 1b: 比對COMART編號 ===================== */
+async function matchComartNumbers(huList){
+  const prompt = `請使用 Google Drive 的 read_file_content 工具讀取檔案，fileId 為 "${DRIVE_FILE_ID}"（檔名 Theo dõi FOLLOW.xlsx），這是一份 HU# 對應 COMART# 的對照表。
+
+讀取後，請針對以下 HU# 編號清單逐一比對。比對時請忽略連字號(-)的有無與位置差異(例如 VNCP090090-D 應視為等同於 VN-CP090090-D)，其餘字元需相符（忽略大小寫差異）。
+
+HU#清單：
+${JSON.stringify(huList)}
+
+完成後只回傳一個JSON物件，不要有任何說明文字、不要使用markdown程式碼框：
+{
+  "matches": {
+    "原始HU#字串1": "對應的COMART編號或null",
+    "原始HU#字串2": "對應的COMART編號或null"
+  }
+}
+matches的鍵必須與輸入清單中的字串完全一致(保留原始格式)。若找不到對應的COMART編號，值請設為null。`;
+
+  const messages = [{ role: "user", content: prompt }];
+  const mcpServers = [{ type: "url", url: "https://drivemcp.googleapis.com/mcp/v1", name: "google-drive" }];
+  const data = await claudeCall(messages, mcpServers);
+  const text = extractText(data);
+  const parsed = parseJSONFromText(text);
+  return parsed.matches || {};
+}
+
+/* ===================== 渲染品項表 ===================== */
+function calcAmount(item){
+  const amt = (Number(item.qty)||0) * (Number(item.unit_price)||0);
+  return amt.toFixed(2);
+}
+
+function renderItemsTable(){
+  document.getElementById("orderNoInput").value = state.orderNo;
+  const tbody = document.getElementById("itemsBody");
+  tbody.innerHTML = "";
+  state.items.forEach((item, idx)=>{
+    const tr = document.createElement("tr");
+    tr.className = "item-row" + (item.comart_no ? "" : " unmatched");
+    tr.innerHTML = `
+      <td class="no-cell">${idx+1}</td>
+      <td><input class="cell-input mono comart-input" data-idx="${idx}" data-field="comart_no" value="${esc(item.comart_no||"")}" placeholder="未比對，請手動輸入"></td>
+      <td><input class="cell-input mono" data-idx="${idx}" data-field="hushan_no" value="${esc(item.hushan_no||"")}"></td>
+      <td><input class="cell-input" data-idx="${idx}" data-field="customer_code" value="${esc(item.customer_code||"")}"></td>
+      <td><input class="cell-input mono" data-idx="${idx}" data-field="delivery_date" value="${esc(item.delivery_date||"")}"></td>
+      <td><input class="cell-input num" type="number" data-idx="${idx}" data-field="qty" value="${esc(item.qty||0)}"></td>
+      <td><input class="cell-input num" type="number" step="0.01" data-idx="${idx}" data-field="unit_price" value="${esc(item.unit_price||0)}"></td>
+      <td class="amount-cell" data-idx="${idx}">${calcAmount(item)}</td>
+      <td><input class="cell-input" data-idx="${idx}" data-field="name" value="${esc(item.name||"")}"></td>
+      <td><input class="cell-input" data-idx="${idx}" data-field="spec" value="${esc(item.spec||"")}"></td>
+      <td><input class="cell-input mono" data-idx="${idx}" data-field="unit" value="${esc(item.unit||"")}"></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll(".cell-input").forEach(inp=>{
+    inp.addEventListener("input", onCellEdit);
+  });
+  updateMatchSummary();
+}
+
+function onCellEdit(e){
+  const idx = +e.target.dataset.idx;
+  const field = e.target.dataset.field;
+  let val = e.target.value;
+  if (field === "qty" || field === "unit_price") val = parseFloat(val) || 0;
+  state.items[idx][field] = val;
+  if (field === "qty" || field === "unit_price"){
+    const row = e.target.closest("tr");
+    row.querySelector(".amount-cell").textContent = calcAmount(state.items[idx]);
+  }
+  if (field === "comart_no"){
+    e.target.closest("tr").classList.toggle("unmatched", !val);
+    updateMatchSummary();
+  }
+}
+
+function updateMatchSummary(){
+  const total = state.items.length;
+  const unmatched = state.items.filter(it=>!it.comart_no).length;
+  const badge = document.getElementById("matchSummary");
+  if (unmatched === 0){
+    badge.textContent = `共 ${total} 筆品項，COMART編號皆已比對成功`;
+    badge.classList.add("allok");
+  } else {
+    badge.textContent = `共 ${total} 筆品項，${unmatched} 筆COMART編號未自動比對，請手動輸入`;
+    badge.classList.remove("allok");
+  }
+}
+
+/* ===================== Step 1 流程 ===================== */
+const dropZone = document.getElementById("dropZone");
+const pdfInput = document.getElementById("pdfInput");
+const processBtn = document.getElementById("processBtn");
+const fileNameEl = document.getElementById("fileName");
+const step1Status = document.getElementById("step1Status");
+
+function handleFileSelected(file){
+  if (!file) return;
+  if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")){
+    step1Status.textContent = "請選擇PDF檔案";
+    step1Status.className = "status error";
+    return;
+  }
+  state.pdfFile = file;
+  state.pdfFilename = file.name;
+  fileNameEl.textContent = file.name;
+  processBtn.disabled = false;
+  step1Status.textContent = "";
+  step1Status.className = "status";
+}
+
+pdfInput.addEventListener("change", (e)=>handleFileSelected(e.target.files[0]));
+
+["dragover","dragleave","drop"].forEach(evtName=>{
+  dropZone.addEventListener(evtName, (e)=>{
+    e.preventDefault();
+    if (evtName === "dragover") dropZone.classList.add("dragover");
+    else dropZone.classList.remove("dragover");
+    if (evtName === "drop"){
+      const file = e.dataTransfer.files[0];
+      handleFileSelected(file);
+    }
+  });
+});
+
+processBtn.addEventListener("click", async ()=>{
+  processBtn.disabled = true;
+  step1Status.className = "status";
+  try {
+    step1Status.textContent = "解析PDF中...";
+    state.pdfBase64 = await fileToBase64(state.pdfFile);
+    const parsed = await extractOrderFromPDF(state.pdfBase64);
+    state.orderNo = parsed.order_no;
+    state.items = parsed.items.map(it=>({
+      hushan_no: it.hushan_no || "",
+      customer_code: it.customer_code || "",
+      delivery_date: it.delivery_date || "",
+      qty: Number(it.qty)||0,
+      unit_price: Number(it.unit_price)||0,
+      name: it.name || "",
+      spec: it.spec || "",
+      unit: it.unit || "",
+      comart_no: null
+    }));
+
+    step1Status.textContent = `已解析 ${state.items.length} 筆品項，正在比對COMART編號...`;
+    try {
+      const matches = await matchComartNumbers(state.items.map(it=>it.hushan_no));
+      state.items.forEach(it=>{ it.comart_no = matches[it.hushan_no] || null; });
+    } catch(matchErr){
+      console.error(matchErr);
+      step1Status.textContent = "COMART編號比對失敗(" + matchErr.message + ")，請於下一步手動輸入。";
+    }
+
+    renderItemsTable();
+    goToStep(2);
+    step1Status.textContent = "";
+  } catch(err){
+    console.error(err);
+    step1Status.textContent = "發生錯誤：" + err.message;
+    step1Status.className = "status error";
+  } finally {
+    processBtn.disabled = false;
+  }
+});
+
+/* ===================== Step 2 -> Step 3 ===================== */
+document.getElementById("backTo1").addEventListener("click", ()=>goToStep(1));
+
+document.getElementById("toStep3").addEventListener("click", async ()=>{
+  state.orderNo = document.getElementById("orderNoInput").value.trim();
+  if (!state.orderNo){
+    const s = document.getElementById("step2Status");
+    s.textContent = "請填寫訂單號";
+    s.className = "status error";
+    return;
+  }
+  const btn = document.getElementById("toStep3");
+  btn.disabled = true;
+  const s = document.getElementById("step2Status");
+  s.className = "status";
+  try {
+    s.textContent = "產生Excel中...";
+    await generateExcel();
+    document.getElementById("excelFilenamePreview").textContent = state.excelFilename;
+    document.getElementById("pdfFilenamePreview").textContent = state.pdfFilename;
+    document.getElementById("emailTo").value = TO_LIST.join("; ");
+    document.getElementById("emailCc").value = CC_LIST.join("; ");
+    document.getElementById("emailSubject").value = buildSubject();
+    document.getElementById("emailBody").value = buildEmailBody();
+    document.getElementById("sendStatus").textContent = "";
+    document.getElementById("sendStatus").className = "status";
+    s.textContent = "";
+    goToStep(3);
+  } catch(err){
+    console.error(err);
+    s.textContent = "產生Excel時發生錯誤：" + err.message;
+    s.className = "status error";
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+/* ===================== 產生Excel ===================== */
+async function generateExcel(){
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("單身資料");
+  ws.addRow(ALL_COLUMNS);
+
+  const thin = { style: "thin" };
+  state.items.forEach((item, idx)=>{
+    const qty = Number(item.qty)||0;
+    const price = Number(item.unit_price)||0;
+    const amount = Math.round(qty*price*100)/100;
+    ws.addRow([
+      idx+1,
+      item.comart_no || "",
+      item.hushan_no || "",
+      item.delivery_date || "",
+      qty,
+      price,
+      amount,
+      0,        // 已交數量
+      "",       // 急料
+      "",       // 結案碼
+      item.name || "",
+      item.spec || "",
+      item.unit || "",
+      item.customer_code || "", // 備註
+      "", "", "", "", "", "", "", "" // 交貨庫別...參考序號
+    ]);
+  });
+
+  ws.eachRow((row)=>{
+    row.eachCell((cell)=>{
+      cell.border = { top: thin, left: thin, bottom: thin, right: thin };
+    });
+  });
+  ws.columns.forEach(col=>{ col.width = 13; });
+
+  const buffer = await wb.xlsx.writeBuffer();
+  state.excelBlob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  state.excelFilename = `越南怡業 ${state.orderNo}.xlsx`;
+}
+
+function downloadExcel(){
+  if (!state.excelBlob) return;
+  const url = URL.createObjectURL(state.excelBlob);
+  const a = document.createElement("a");
+  a.href = url; a.download = state.excelFilename;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function downloadOriginalPDF(){
+  if (!state.pdfFile) return;
+  const url = URL.createObjectURL(state.pdfFile);
+  const a = document.createElement("a");
+  a.href = url; a.download = state.pdfFilename;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/* ===================== Email 內容 ===================== */
+function buildSubject(){
+  return `Hushan DOORHANDLE 越南一般訂單 PO#${state.orderNo}`;
+}
+
+function buildTextTable(){
+  const headers = ["no","comart no","hushan no","交貨日期","Qty"];
+  const rows = state.items.map((it,idx)=>[
+    String(idx+1),
+    it.comart_no || "(未比對)",
+    it.hushan_no || "",
+    it.delivery_date || "",
+    String(it.qty || 0)
+  ]);
+  const all = [headers, ...rows];
+  const widths = headers.map((_,c)=>Math.max(...all.map(r=>String(r[c]).length)));
+  const pad = (s,w)=> s + " ".repeat(Math.max(0, w - s.length));
+  return all.map(r=>r.map((c,i)=>pad(String(c), widths[i])).join("  ")).join("\n");
+}
+
+function buildEmailBody(){
+  return `Hi 阿麗,
+請評估交期是否可以完成，若不行的話請回復可完成時間，謝謝。
+
+Hi Nancy,
+Attached is the regular order for Hushan. The customer's purchase order numbers are:
+PO#${state.orderNo}
+
+${buildTextTable()}`;
+}
+
+function outlookComposeLink(){
+  const params = new URLSearchParams({
+    to: TO_LIST.join(";"),
+    cc: CC_LIST.join(";"),
+    subject: document.getElementById("emailSubject").value,
+    body: document.getElementById("emailBody").value
+  });
+  return "https://outlook.office.com/mail/deeplink/compose?" + params.toString();
+}
+
+/* ===================== Step 3 操作 ===================== */
+document.getElementById("downloadExcelBtn").addEventListener("click", downloadExcel);
+document.getElementById("downloadPdfBtn").addEventListener("click", downloadOriginalPDF);
+
+document.getElementById("copyEmailBtn").addEventListener("click", ()=>{
+  const text = `收件人: ${document.getElementById("emailTo").value}
+副本: ${document.getElementById("emailCc").value}
+主旨: ${document.getElementById("emailSubject").value}
+
+${document.getElementById("emailBody").value}`;
+  navigator.clipboard.writeText(text).then(()=>{
+    showToast("已複製郵件內容");
+  }).catch(()=>{
+    showToast("複製失敗，請手動選取文字複製");
+  });
+});
+
+document.getElementById("outlookLinkBtn").addEventListener("click", ()=>{
+  window.open(outlookComposeLink(), "_blank");
+});
+
+document.getElementById("sendBtn").addEventListener("click", async ()=>{
+  const btn = document.getElementById("sendBtn");
+  const statusEl = document.getElementById("sendStatus");
+  btn.disabled = true;
+  statusEl.className = "status";
+  statusEl.textContent = "正在嘗試透過 Microsoft 365 建立郵件草稿...";
+
+  const prompt = `請使用 Microsoft 365 (Outlook) 相關工具，以下列內容建立一封郵件草稿（若有可用的建立草稿或寄送工具，請建立草稿讓使用者自行確認後再寄送，不要直接寄出）：
+
+收件人(To): ${TO_LIST.join(", ")}
+副本(Cc): ${CC_LIST.join(", ")}
+主旨: ${document.getElementById("emailSubject").value}
+內容:
+${document.getElementById("emailBody").value}
+
+完成後請用一句話告訴我結果：是否成功建立草稿，或目前沒有可用的建立草稿/寄送工具。`;
+
+  const mcpServers = [{ type: "url", url: "https://microsoft365.mcp.claude.com/mcp", name: "microsoft365" }];
+
+  try {
+    const data = await claudeCall([{ role: "user", content: prompt }], mcpServers);
+    const text = extractText(data);
+    const toolUseCount = extractToolUseCount(data);
+    if (toolUseCount === 0){
+      statusEl.className = "status error";
+      statusEl.textContent = "目前 Microsoft 365 整合未提供建立郵件草稿/寄送的工具，請使用上方「複製郵件內容」或「在Outlook網頁版開啟」，並手動附上 PDF 與 Excel。" + (text ? ("\n\nClaude回覆：" + text) : "");
+    } else {
+      statusEl.className = "status ok";
+      statusEl.textContent = (text || "已嘗試透過 Microsoft 365 處理，請至 Outlook 確認草稿匣，並記得手動附上 PDF 與 Excel 附件。");
+    }
+  } catch(err){
+    console.error(err);
+    statusEl.className = "status error";
+    statusEl.textContent = "呼叫 Microsoft 365 時發生錯誤：" + err.message + "。請使用上方「複製郵件內容」或「在Outlook網頁版開啟」作為備用方式。";
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("backTo2").addEventListener("click", ()=>goToStep(2));
+
+document.getElementById("resetBtn").addEventListener("click", ()=>{
+  state = { pdfFile:null, pdfFilename:"", pdfBase64:"", orderNo:"", items:[], excelBlob:null, excelFilename:"" };
+  pdfInput.value = "";
+  fileNameEl.textContent = "";
+  processBtn.disabled = true;
+  step1Status.textContent = "";
+  step1Status.className = "status";
+  goToStep(1);
+});
+</script>
+</body>
+</html>
